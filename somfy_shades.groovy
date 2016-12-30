@@ -1,12 +1,13 @@
 /**
  * 
  * https://community.smartthings.com/t/my-somfy-smartthings-integration/13492
- * Modified ERS 5/1/2016
+ * Modified ERS 12/29/2016
  *
- * Version 1.0.5
+ * Version 1.0.6
  *
  * Version History
  *
+ * 1.0.6    29 Dec 2016		Health Check
  * 1.0.5    01 May 2016		bug fixes
  * 1.0.4    01 May 2016		Sync commands for cases where blinds respond to multiple channels (all vs. single)
  * 1.0.3    17 Apr 2016		Expanded runIn timer for movement and  completed states
@@ -42,6 +43,7 @@
         //capability "Polling"
         capability "Refresh"
         capability "Actuator"
+        capability "Health Check"
 
         attribute "stopStr", "enum", ["preset/stop", "close/stop"]
 
@@ -145,8 +147,15 @@ def configure() {
     updated()
 }
 
+def ping() {
+	refresh()
+}
+
 def updated() {
     log.trace "updated() called"
+
+    sendEvent(name: "checkInterval", value: 60 * 60 * 8, data: [protocol: "zwave", hubHardwareId: device.hub.hardwareID], displayed: false)
+
     def currstat = device.latestValue("level")
     def currstat1 = device.latestValue("windowShade")
 
@@ -210,6 +219,7 @@ def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd)
 {
     def result = []
     def tempstr = ""
+    def statstr = "SAME"
 
     log.trace "Basic report cmd.value:  ${cmd.value}"
 
@@ -230,7 +240,11 @@ def zwaveEvent(physicalgraph.zwave.commands.basicv1.BasicReport cmd)
         //result << createEvent(name: "switch", value: "default")
         tempstr="neither open or closed"
     }
-    log.debug "Reported state is ${tempstr}; device is ${device.latestValue('switch')}  ${device.latestValue('level')} "
+    def swstatstr = "${device.latestValue('switch')}"
+    if (cmd.value == 0 && swstatstr == "on") { statstr = "DIFFERENT" }
+    if (cmd.value == 0xFF && swstatstr == "off") { statstr = "DIFFERENT" }
+        
+    log.debug "${statstr} Zwave state is ${tempstr}; device stored state is ${device.latestValue('switch')} dimmer level: ${device.latestValue('level')} "
     return result
 }
 
@@ -341,14 +355,14 @@ def TiltSync() {
 def refresh() {
     log.trace "refresh()"
     delayBetween([
-        zwave.switchBinaryV1.switchBinaryGet().format(),
-        zwave.switchMultilevelV1.switchMultilevelGet().format(),
+        //zwave.switchBinaryV1.switchBinaryGet().format(),
+        //zwave.switchMultilevelV1.switchMultilevelGet().format(),
         //zwave.meterV2.meterGet(scale: 0).format(),      // get kWh
         //zwave.meterV2.meterGet(scale: 2).format(),      // get Watts
         //zwave.sensorMultilevelV1.sensorMultilevelGet().format(),
         //zwave.sensorMultilevelV5.sensorMultilevelGet(sensorType:1, scale:1).format(),  // get temp in Fahrenheit
         //zwave.batteryV1.batteryGet().format(),
-        zwave.basicV1.basicGet().format(),
+        zwave.basicV1.basicGet().format()
     ], 3000)
 }
 
